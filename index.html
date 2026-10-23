@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D LC Oscillatory Circuit Lab | Eng. Marwan Y. Almasajidi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;900&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #050814;
+            color: #f8fafc;
+            user-select: none;
+        }
+        .bilingual-name {
+            font-family: 'Cairo', 'Inter', sans-serif;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+        }
+        .step-active {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+        }
+        .graph-expanded {
+            width: 680px !important;
+            max-width: 92vw !important;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- ========================================== -->
+    <!-- PASSWORD PROTECTION LOCK SCREEN            -->
+    <!-- ========================================== -->
+    <div id="lock-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl">
+        <div class="w-96 max-w-[90vw] p-6 rounded-2xl glass-panel text-center space-y-4 border border-cyan-500/40">
+            <div class="w-14 h-14 mx-auto rounded-full bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-2xl">
+                🔒
+            </div>
+            <div>
+                <h2 class="text-lg font-black text-cyan-300">3D Physics Interactive Lab</h2>
+                <p class="text-xs text-amber-400 font-bold bilingual-name mt-1">
+                    Eng. Marwan Y. Almasajidi | م. مروان يحيى المساجدي
+                </p>
+            </div>
+            <p class="text-xs text-slate-300">Please enter the access password to launch the simulation:</p>
+            <div class="space-y-2">
+                <input type="password" id="pwd-input" placeholder="Enter Password..." 
+                    class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-center text-white text-sm focus:outline-none focus:border-cyan-400"
+                    onkeydown="if(event.key === 'Enter') verifyPassword()">
+                <p id="pwd-error" class="text-xs text-rose-400 hidden">❌ Incorrect password! Please try again.</p>
+            </div>
+            <button onclick="verifyPassword()" class="w-full py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg transition">
+                Unlock Lab 🚀
+            </button>
+        </div>
+    </div>
+
+    <!-- 3D Scene Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Header -->
+    <header class="relative z-10 flex flex-wrap items-center justify-between px-6 py-3 m-3 rounded-2xl glass-panel">
+        <div class="flex items-center gap-3">
+            <div class="w-3 h-10 bg-cyan-400 rounded-full animate-pulse"></div>
+            <div>
+                <h1 class="text-lg md:text-xl font-black text-cyan-300 tracking-wide">
+                    3D Interactive LC Oscillatory Circuit Lab
+                </h1>
+                <p class="text-xs text-slate-300 bilingual-name">
+                    Prepared by: <span class="text-amber-400 font-bold text-sm">Eng. Marwan Y. Almasajidi | م. مروان يحيى المساجدي</span> — Grade 12 Physics
+                </p>
+            </div>
+        </div>
+
+        <!-- Quick Switch Controls -->
+        <div class="flex flex-wrap items-center gap-2 mt-2 md:mt-0">
+            <button id="btn-sw1" onclick="setMode('charge')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white transition shadow-lg">
+                ⚡ Close Switch (1): Charge C
+            </button>
+            <button id="btn-sw2" onclick="setMode('oscillate')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition shadow-lg">
+                🔄 Close Switch (2): Oscillate
+            </button>
+            <button id="btn-recharge" onclick="pulseRecharge()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-lg" title="Periodically close switch (1) to recharge capacitor and compensate for lost energy">
+                🔋 Recharge Pulse (Solution)
+            </button>
+            <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs bg-slate-800 border border-slate-600 cursor-pointer">
+                <input type="checkbox" id="chk-damping" checked class="accent-rose-500 w-4 h-4" onchange="onDampingToggle()">
+                <span>Ohmic Losses (Wave Decay)</span>
+            </label>
+        </div>
+    </header>
+
+    <!-- Left Panel: Curriculum 4 Steps + Q&A -->
+    <aside class="relative z-10 w-80 md:w-96 max-h-[82vh] overflow-y-auto m-3 p-4 rounded-2xl glass-panel float-left flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+            <h2 class="text-sm font-bold text-cyan-400">How does it work?</h2>
+            <span class="text-[11px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">Drag to Rotate 3D</span>
+        </div>
+
+        <!-- Step Selector Buttons -->
+        <div class="grid grid-cols-4 gap-1.5">
+            <button onclick="selectStep(1)" id="step-btn-1" class="py-2 rounded-lg text-xs font-bold border border-slate-600 bg-slate-800/80 hover:bg-slate-700 transition step-active">Step 1</button>
+            <button onclick="selectStep(2)" id="step-btn-2" class="py-2 rounded-lg text-xs font-bold border border-slate-600 bg-slate-800/80 hover:bg-slate-700 transition">Step 2</button>
+            <button onclick="selectStep(3)" id="step-btn-3" class="py-2 rounded-lg text-xs font-bold border border-slate-600 bg-slate-800/80 hover:bg-slate-700 transition">Step 3</button>
+            <button onclick="selectStep(4)" id="step-btn-4" class="py-2 rounded-lg text-xs font-bold border border-slate-600 bg-slate-800/80 hover:bg-slate-700 transition">Step 4</button>
+        </div>
+
+        <!-- Step Explanation Content -->
+        <div id="step-content" class="p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 text-xs space-y-2 leading-relaxed">
+            <!-- Populated by JS -->
+        </div>
+
+        <!-- Energy Bars -->
+        <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-2">
+            <div class="text-xs font-bold text-slate-300 mb-1">Instantaneous Energy Exchange:</div>
+            <div>
+                <div class="flex justify-between text-[11px] text-rose-400 mb-0.5">
+                    <span>Electric Field Energy in Capacitor (C)</span>
+                    <span id="val-ec">100%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="bar-ec" class="h-full bg-gradient-to-r from-rose-500 to-amber-400 w-full transition-all duration-75"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between text-[11px] text-cyan-400 mb-0.5">
+                    <span>Magnetic Field Energy in Coil (L)</span>
+                    <span id="val-eb">0%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="bar-eb" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 w-0 transition-all duration-75"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decay Explanation Card (From Page 2) -->
+        <div class="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-xs space-y-1.5">
+            <h3 class="font-bold text-rose-300">❓ These waves gradually decay over time. Why?</h3>
+            <p class="text-slate-200 text-[11px] leading-relaxed">
+                <strong>Reason:</strong> Because electrical energy is dissipated as heat in the wires due to ohmic (resistive) losses.
+            </p>
+            <p class="text-emerald-300 text-[11px] pt-1.5 border-t border-rose-800/50 leading-relaxed">
+                <strong>💡 Solution:</strong> We periodically close switch (1) to recharge the capacitor and compensate for the lost electrical energy.
+            </p>
+        </div>
+    </aside>
+
+    <!-- Bottom Right Panel: Zoomable Oscilloscope Graph i(t) -->
+    <div id="graph-panel" class="fixed bottom-3 right-3 z-10 w-[420px] max-w-[92vw] p-3.5 rounded-2xl glass-panel transition-all duration-300">
+        <!-- Header & Status -->
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div>
+                <span class="text-xs font-bold text-cyan-300 block">Damped Oscillation Graph: <span class="text-white font-mono">i(t) vs t</span></span>
+                <span class="text-[10px] text-slate-400">Scroll wheel on graph or use buttons to Zoom In/Out</span>
+            </div>
+            <span id="status-badge" class="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold">
+                Switch (1) Closed - Charging
+            </span>
+        </div>
+
+        <!-- Zoom & Scale Controls Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-1.5 mb-2 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800 text-[11px]">
+            <div class="flex items-center gap-1">
+                <span class="text-slate-400 px-1">Time (X):</span>
+                <button onclick="zoomTime(1.25)" class="px-2 py-0.5 bg-slate-800 hover:bg-cyan-700 rounded text-cyan-300 font-bold" title="Zoom In Time">+</button>
+                <button onclick="zoomTime(0.8)" class="px-2 py-0.5 bg-slate-800 hover:bg-cyan-700 rounded text-cyan-300 font-bold" title="Zoom Out Time">−</button>
+            </div>
+            <div class="flex items-center gap-1">
+                <span class="text-slate-400 px-1">Amp (Y):</span>
+                <button onclick="zoomAmp(1.2)" class="px-2 py-0.5 bg-slate-800 hover:bg-emerald-700 rounded text-emerald-300 font-bold" title="Zoom In Amplitude">+</button>
+                <button onclick="zoomAmp(0.83)" class="px-2 py-0.5 bg-slate-800 hover:bg-emerald-700 rounded text-emerald-300 font-bold" title="Zoom Out Amplitude">−</button>
+            </div>
+            <div class="flex items-center gap-1">
+                <button onclick="resetGraphZoom()" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="Reset View">Reset</button>
+                <button onclick="toggleExpandGraph()" id="btn-expand" class="px-2 py-0.5 bg-cyan-900/60 hover:bg-cyan-700 border border-cyan-500/40 rounded text-cyan-200 font-semibold">⛶ Expand</button>
+            </div>
+        </div>
+
+        <!-- Decay Rate Slider -->
+        <div class="flex items-center gap-2 mb-2 px-1 text-[11px]">
+            <span class="text-rose-300 font-semibold whitespace-nowrap">Decay Rate (R):</span>
+            <input type="range" id="slider-decay" min="0.08" max="0.65" step="0.01" value="0.25" class="w-full accent-rose-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateDecayRate(this.value)">
+            <span id="val-decay" class="text-slate-300 font-mono w-10 text-right">0.25</span>
+        </div>
+
+        <!-- Interactive Canvas -->
+        <div class="relative">
+            <canvas id="oscilloscope" width="640" height="210" class="w-full h-44 bg-slate-950 rounded-xl border border-slate-800 cursor-ns-resize"></canvas>
+            <div class="absolute bottom-1.5 right-2.5 flex items-center gap-3 text-[10px] pointer-events-none">
+                <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-0.5 bg-emerald-400 inline-block"></span> Wave i(t)</span>
+                <span class="flex items-center gap-1 text-rose-400"><span class="w-2.5 h-0.5 border-b border-dashed border-rose-400 inline-block"></span> Decay Envelope</span>
+                <span class="flex items-center gap-1 text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Live Time (t)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 0. PASSWORD & CODE PROTECTION SETTINGS
+        // ==========================================
+        // Change "2026" below to any password you want! (Base64 encoded for basic obfuscation)
+        const SECRET_HASH = btoa("2026"); 
+
+        function verifyPassword() {
+            const input = document.getElementById('pwd-input').value.trim();
+            const err = document.getElementById('pwd-error');
+            if (btoa(input) === SECRET_HASH) {
+                document.getElementById('lock-screen').style.display = 'none';
+            } else {
+                err.classList.remove('hidden');
+            }
+        }
+
+        // Disable F12, Ctrl+Shift+I, Ctrl+U to deter casual code copying
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F12' || 
+               (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || 
+               (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S'))) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // ==========================================
+        // 1. CURRICULUM STEPS DATA (English Textbook)
+        // ==========================================
+        const stepsData = {
+            1: {
+                title: "1) Charging the Capacitor",
+                desc: "The capacitor is charged by closing switch (1) and opening switch (2), until the voltage across the capacitor plates becomes equal to the voltage of the power source (the battery). As a result, an electric field is generated between the capacitor plates due to the energy stored between them."
+            },
+            2: {
+                title: "2) Capacitor Discharges into Coil",
+                desc: "Next, switch (2) is closed and switch (1) is opened. The capacitor discharges, transferring its charge to the coil (inductor) in the form of a momentary current that gradually fades until the voltage across the capacitor becomes zero."
+            },
+            3: {
+                title: "3) Self-Induction & Opposite Polarity",
+                desc: "The current in the coil is stored as a magnetic field. This magnetic field induces a self-induced current in the coil, which recharges the capacitor with opposite polarity compared to the previous step. When the voltage in the coil becomes zero, the energy stored in the magnetic field is fully transferred and stored as electric energy in the capacitor."
+            },
+            4: {
+                title: "4) Continuous Exchange & EM Waves",
+                desc: "The capacitor then discharges its charge back into the coil, and the process repeats. This continuous exchange of energy and the oscillation of electric charges between the capacitor and the coil results in the generation of high-frequency electromagnetic waves. They spread in space with the speed of light in all directions."
+            }
+        };
+
+        // ==========================================
+        // 2. THREE.JS 3D SCENE SETUP
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050814, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 14, 22);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+        controls.target.set(0, 1, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0xf43f5e, 1, 30);
+        pointLight.position.set(0, 5, 0);
+        scene.add(pointLight);
+
+        const grid = new THREE.GridHelper(40, 40, 0x1e293b, 0x0f172a);
+        grid.position.y = -2;
+        scene.add(grid);
+
+        // ==========================================
+        // 3. 3D CIRCUIT COMPONENTS
+        // ==========================================
+        const wireMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8, roughness: 0.2 });
+
+        function createWire(x1, z1, x2, z2, y = 0) {
+            const dx = x2 - x1;
+            const dz = z2 - z1;
+            const len = Math.hypot(dx, dz);
+            const geo = new THREE.CylinderGeometry(0.12, 0.12, len, 16);
+            const mesh = new THREE.Mesh(geo, wireMat);
+            mesh.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
+            mesh.rotation.z = Math.PI / 2;
+            mesh.rotation.y = -Math.atan2(dz, dx);
+            scene.add(mesh);
+        }
+
+        createWire(-8, -5, -8, 5);
+        createWire(-8, -5, 0, -5);
+        createWire(-8, 5, 0, 5);
+        createWire(0, -5, 0, -1.2);
+        createWire(0, 1.2, 0, 5);
+        createWire(0, -5, 8, -5);
+        createWire(0, 5, 8, 5);
+        createWire(8, -5, 8, -2.5);
+        createWire(8, 2.5, 8, 5);
+
+        // DC Battery
+        const batteryGroup = new THREE.Group();
+        batteryGroup.position.set(-8, 0, 0);
+        const batBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.8, 0.8, 3, 24),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.4 })
+        );
+        batBody.rotation.x = Math.PI / 2;
+        const batTop = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.82, 0.82, 1, 24),
+            new THREE.MeshStandardMaterial({ color: 0xe11d48, emissive: 0x881337, emissiveIntensity: 0.4 })
+        );
+        batTop.rotation.x = Math.PI / 2;
+        batTop.position.z = -1.2;
+        batteryGroup.add(batBody, batTop);
+        scene.add(batteryGroup);
+
+        // Switches (1) & (2)
+        function createSwitch(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            const postGeo = new THREE.SphereGeometry(0.3, 16, 16);
+            const postMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
+            const p1 = new THREE.Mesh(postGeo, postMat);
+            p1.position.x = -1;
+            const p2 = new THREE.Mesh(postGeo, postMat);
+            p2.position.x = 1;
+
+            const pivot = new THREE.Group();
+            pivot.position.set(-1, 0, 0);
+            const blade = new THREE.Mesh(
+                new THREE.BoxGeometry(2.1, 0.18, 0.25),
+                new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 })
+            );
+            blade.position.x = 1.05;
+            pivot.add(blade);
+
+            group.add(p1, p2, pivot);
+            scene.add(group);
+            return pivot;
+        }
+        const sw1Pivot = createSwitch(-4, -5);
+        const sw2Pivot = createSwitch(4, -5);
+
+        // Capacitor (C)
+        const capGroup = new THREE.Group();
+        const plateGeo = new THREE.BoxGeometry(3.6, 2.2, 0.2);
+        const plateTopMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, metalness: 0.6, roughness: 0.2, emissive: 0xf43f5e, emissiveIntensity: 0.3 });
+        const plateBotMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.6, roughness: 0.2, emissive: 0x38bdf8, emissiveIntensity: 0.3 });
+
+        const plateTop = new THREE.Mesh(plateGeo, plateTopMat);
+        plateTop.position.set(0, 0, -1.1);
+        const plateBot = new THREE.Mesh(plateGeo, plateBotMat);
+        plateBot.position.set(0, 0, 1.1);
+        capGroup.add(plateTop, plateBot);
+
+        const eFieldGroup = new THREE.Group();
+        for (let i = -1.2; i <= 1.2; i += 0.6) {
+            const eLine = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.05, 1.9, 8),
+                new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.8 })
+            );
+            eLine.rotation.x = Math.PI / 2;
+            eLine.position.set(i, 0, 0);
+            eFieldGroup.add(eLine);
+        }
+        capGroup.add(eFieldGroup);
+        scene.add(capGroup);
+
+        // Inductor Coil (L)
+        class HelixCurve extends THREE.Curve {
+            getPoint(t) {
+                const turns = 6;
+                const angle = t * Math.PI * 2 * turns;
+                const radius = 0.9;
+                const z = (t - 0.5) * 5;
+                return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z);
+            }
+        }
+        const coilGeo = new THREE.TubeGeometry(new HelixCurve(), 150, 0.15, 12, false);
+        const coilMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.15, emissive: 0x0ea5e9, emissiveIntensity: 0 });
+        const coilMesh = new THREE.Mesh(coilGeo, coilMat);
+        coilMesh.position.set(8, 0, 0);
+        scene.add(coilMesh);
+
+        const bFieldGroup = new THREE.Group();
+        bFieldGroup.position.set(8, 0, 0);
+        for (let r = 1.3; r <= 2.5; r += 0.6) {
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(r, 0.05, 12, 50),
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0 })
+            );
+            ring.rotation.y = Math.PI / 2;
+            bFieldGroup.add(ring);
+        }
+        scene.add(bFieldGroup);
+
+        // EM Radiation Waves
+        const emWaves = [];
+        for (let i = 0; i < 3; i++) {
+            const waveRing = new THREE.Mesh(
+                new THREE.RingGeometry(1, 1.15, 64),
+                new THREE.MeshBasicMaterial({ color: 0xa855f7, side: THREE.DoubleSide, transparent: true, opacity: 0 })
+            );
+            waveRing.rotation.x = Math.PI / 2;
+            waveRing.position.set(4, 0, 0);
+            waveRing.userData = { phase: i * 0.33 };
+            scene.add(waveRing);
+            emWaves.push(waveRing);
+        }
+
+        // Current Charge Particles
+        const particles = [];
+        const pGeo = new THREE.SphereGeometry(0.22, 12, 12);
+        const pMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9 });
+        for (let i = 0; i < 24; i++) {
+            const p = new THREE.Mesh(pGeo, pMat);
+            scene.add(p);
+            particles.push({ mesh: p, pos: i / 24 });
+        }
+
+        function getLoopPoint(t) {
+            t = ((t % 1) + 1) % 1;
+            if (t < 0.25) {
+                const k = t / 0.25;
+                return new THREE.Vector3(k * 8, 0, -5);
+            } else if (t < 0.5) {
+                const k = (t - 0.25) / 0.25;
+                return new THREE.Vector3(8, 0, -5 + k * 10);
+            } else if (t < 0.75) {
+                const k = (t - 0.5) / 0.25;
+                return new THREE.Vector3(8 * (1 - k), 0, 5);
+            } else {
+                const k = (t - 0.75) / 0.25;
+                return new THREE.Vector3(0, 0, 5 - k * 10);
+            }
+        }
+
+        // ==========================================
+        // 4. SIMULATION PHYSICS & STOP-ON-DECAY LOGIC
+        // ==========================================
+        let simMode = 'charge'; // 'charge', 'oscillate', 'decayed'
+        let activeStep = 1;
+        let omega = 4.2;
+        let dampingFactor = 0.25;
+        let simTime = 0;
+        let amplitude = 1.0;
+        let q = 1.0;
+        let iCurr = 0;
+
+        let timeWindow = 14.0;
+        let ampScale = 1.0;
+
+        function updateStepUI(stepNum) {
+            activeStep = stepNum;
+            for (let s = 1; s <= 4; s++) {
+                const btn = document.getElementById(`step-btn-${s}`);
+                if (s === stepNum) btn.classList.add('step-active');
+                else btn.classList.remove('step-active');
+            }
+            const d = stepsData[stepNum];
+            document.getElementById('step-content').innerHTML = `
+                <div class="font-bold text-cyan-300 text-sm">${d.title}</div>
+                <p class="text-slate-200 leading-relaxed">${d.desc}</p>
+            `;
+        }
+
+        function setMode(mode) {
+            simMode = mode;
+            const badge = document.getElementById('status-badge');
+            const btnRecharge = document.getElementById('btn-recharge');
+            btnRecharge.classList.remove('animate-bounce', 'ring-2', 'ring-emerald-300');
+
+            if (mode === 'charge') {
+                amplitude = 1.0;
+                q = 1.0;
+                iCurr = 0;
+                simTime = 0;
+                badge.textContent = "Switch (1) Closed - Charging";
+                badge.className = "text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold";
+                updateStepUI(1);
+            } else if (mode === 'oscillate') {
+                // Start fresh if previously decayed
+                if (amplitude <= 0.015 || simTime >= timeWindow) {
+                    simTime = 0;
+                    amplitude = 1.0;
+                }
+                badge.textContent = "Switch (2) Closed - Oscillating";
+                badge.className = "text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold";
+                updateStepUI(4);
+            }
+        }
+
+        function selectStep(stepNum) {
+            updateStepUI(stepNum);
+            if (stepNum === 1) {
+                setMode('charge');
+            } else if (stepNum === 2) {
+                simMode = 'oscillate';
+                simTime = (Math.PI / 2) / omega;
+            } else if (stepNum === 3) {
+                simMode = 'oscillate';
+                simTime = Math.PI / omega;
+            } else if (stepNum === 4) {
+                simTime = 0;
+                amplitude = 1.0;
+                setMode('oscillate');
+            }
+        }
+
+        function pulseRecharge() {
+            sw1Pivot.rotation.z = 0;
+            amplitude = 1.0;
+            simTime = 0;
+            simMode = 'oscillate';
+            const badge = document.getElementById('status-badge');
+            badge.textContent = "⚡ Switch (1) Pulsed - Energy Compensated!";
+            badge.className = "text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold";
+            document.getElementById('btn-recharge').classList.remove('animate-bounce', 'ring-2', 'ring-emerald-300');
+        }
+
+        function onDampingToggle() {
+            if (simMode === 'decayed') {
+                simTime = 0;
+                amplitude = 1.0;
+                setMode('oscillate');
+            }
+        }
+
+        function updateDecayRate(val) {
+            dampingFactor = parseFloat(val);
+            document.getElementById('val-decay').textContent = dampingFactor.toFixed(2);
+        }
+
+        function zoomTime(factor) {
+            timeWindow = Math.min(Math.max(timeWindow / factor, 4.0), 40.0);
+        }
+
+        function zoomAmp(factor) {
+            ampScale = Math.min(Math.max(ampScale * factor, 0.4), 2.5);
+        }
+
+        function resetGraphZoom() {
+            timeWindow = 14.0;
+            ampScale = 1.0;
+            dampingFactor = 0.25;
+            document.getElementById('slider-decay').value = 0.25;
+            document.getElementById('val-decay').textContent = "0.25";
+        }
+
+        function toggleExpandGraph() {
+            const panel = document.getElementById('graph-panel');
+            const btn = document.getElementById('btn-expand');
+            panel.classList.toggle('graph-expanded');
+            const isExp = panel.classList.contains('graph-expanded');
+            btn.textContent = isExp ? "🗗 Collapse" : "⛶ Expand";
+        }
+
+        const oscCanvas = document.getElementById('oscilloscope');
+        oscCanvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) zoomTime(1.15);
+            else zoomTime(0.87);
+        });
+
+        updateStepUI(1);
+
+        // ==========================================
+        // 5. TEXTBOOK DECAY CURVE & ENVELOPE GRAPH
+        // ==========================================
+        const ctx = oscCanvas.getContext('2d');
+
+        function drawOscilloscope() {
+            const W = oscCanvas.width;
+            const H = oscCanvas.height;
+            ctx.clearRect(0, 0, W, H);
+
+            const padL = 38;
+            const padR = 18;
+            const midY = H / 2;
+            const plotW = W - padL - padR;
+            const maxAmpPx = (H / 2 - 18) * ampScale;
+            const isDamped = document.getElementById('chk-damping').checked;
+            const b = isDamped ? dampingFactor : 0;
+
+            // Grid Lines
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            for (let gx = padL; gx <= W - padR; gx += plotW / 7) {
+                ctx.beginPath();
+                ctx.moveTo(gx, 10);
+                ctx.lineTo(gx, H - 10);
+                ctx.stroke();
+            }
+
+            // Axes
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(padL, 8);
+            ctx.lineTo(padL, H - 8);
+            ctx.moveTo(padL, midY);
+            ctx.lineTo(W - 6, midY);
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.fillText('i(t)', 6, 20);
+            ctx.fillText('0', 22, midY + 4);
+            ctx.fillText('-i(t)', 2, H - 12);
+            ctx.fillText('t', W - 14, midY + 14);
+
+            // 1) Red Dashed Exponential Decay Envelopes
+            if (isDamped) {
+                ctx.save();
+                ctx.strokeStyle = '#fb7185';
+                ctx.lineWidth = 1.6;
+                ctx.setLineDash([5, 5]);
+
+                ctx.beginPath();
+                for (let px = 0; px <= plotW; px += 3) {
+                    const t = (px / plotW) * timeWindow;
+                    const env = Math.exp(-b * t);
+                    const y = midY - env * maxAmpPx;
+                    if (px === 0) ctx.moveTo(padL + px, y);
+                    else ctx.lineTo(padL + px, y);
+                }
+                ctx.stroke();
+
+                ctx.beginPath();
+                for (let px = 0; px <= plotW; px += 3) {
+                    const t = (px / plotW) * timeWindow;
+                    const env = -Math.exp(-b * t);
+                    const y = midY - env * maxAmpPx;
+                    if (px === 0) ctx.moveTo(padL + px, y);
+                    else ctx.lineTo(padL + px, y);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 2) Full Reference Curve
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.22)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let px = 0; px <= plotW; px++) {
+                const t = (px / plotW) * timeWindow;
+                const val = -Math.exp(-b * t) * Math.sin(omega * t);
+                const y = midY - val * maxAmpPx;
+                if (px === 0) ctx.moveTo(padL + px, y);
+                else ctx.lineTo(padL + px, y);
+            }
+            ctx.stroke();
+
+            // 3) Active Traced Wave up to simTime
+            const activeT = simMode === 'charge' ? 0 : Math.min(simTime, timeWindow);
+            const activePx = Math.floor((activeT / timeWindow) * plotW);
+
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 2.6;
+            ctx.beginPath();
+            for (let px = 0; px <= activePx; px++) {
+                const t = (px / plotW) * timeWindow;
+                const val = -Math.exp(-b * t) * Math.sin(omega * t);
+                const y = midY - val * maxAmpPx;
+                if (px === 0) ctx.moveTo(padL + px, y);
+                else ctx.lineTo(padL + px, y);
+            }
+            ctx.stroke();
+
+            // 4) Live Time Marker Dot
+            const curVal = (simMode === 'charge' || simMode === 'decayed') ? 0 : -Math.exp(-b * activeT) * Math.sin(omega * activeT);
+            const markerX = padL + activePx;
+            const markerY = midY - curVal * maxAmpPx;
+
+            ctx.fillStyle = simMode === 'decayed' ? '#f43f5e' : '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(markerX, markerY, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+
+        // ==========================================
+        // 6. MAIN ANIMATION LOOP
+        // ==========================================
+        let lastTime = performance.now();
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            const dt = Math.min((now - lastTime) / 1000, 0.05);
+            lastTime = now;
+
+            const isDamped = document.getElementById('chk-damping').checked;
+            const b = isDamped ? dampingFactor : 0;
+
+            if (simMode === 'charge') {
+                sw1Pivot.rotation.z += (0 - sw1Pivot.rotation.z) * 0.15;
+                sw2Pivot.rotation.z += (0.65 - sw2Pivot.rotation.z) * 0.15;
+                q = 1.0;
+                iCurr = 0;
+                amplitude = 1.0;
+            } else if (simMode === 'oscillate') {
+                sw1Pivot.rotation.z += (0.65 - sw1Pivot.rotation.z) * 0.15;
+                sw2Pivot.rotation.z += (0 - sw2Pivot.rotation.z) * 0.15;
+
+                simTime += dt;
+                amplitude = Math.exp(-b * simTime);
+
+                // STOP WHEN WAVE DECAYS (Does NOT restart automatically)
+                if (isDamped && (amplitude <= 0.012 || simTime >= timeWindow)) {
+                    simMode = 'decayed';
+                    amplitude = 0;
+                    q = 0;
+                    iCurr = 0;
+                    const badge = document.getElementById('status-badge');
+                    badge.textContent = "⚠️ Wave Decayed (Stopped) — Click Recharge Pulse!";
+                    badge.className = "text-[10px] px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold";
+                    document.getElementById('btn-recharge').classList.add('animate-bounce', 'ring-2', 'ring-emerald-300');
+                } else {
+                    if (!isDamped && simTime >= timeWindow) {
+                        simTime = 0; // Only continuous ideal wave wraps around
+                    }
+                    q = amplitude * Math.cos(omega * simTime);
+                    iCurr = -amplitude * Math.sin(omega * simTime);
+                }
+            } else if (simMode === 'decayed') {
+                // Remains stopped at zero until user clicks Recharge Pulse or Charge
+                q = 0;
+                iCurr = 0;
+                amplitude = 0;
+            }
+
+            drawOscilloscope();
+
+            // Update Capacitor Plates Polarity & E-Field
+            const absQ = Math.abs(q);
+            eFieldGroup.scale.set(1, 1, Math.max(0.001, absQ));
+            eFieldGroup.children.forEach(line => {
+                line.material.opacity = absQ * 0.9;
+            });
+
+            if (q >= 0) {
+                plateTopMat.color.setHex(0xf43f5e);
+                plateTopMat.emissive.setHex(0xf43f5e);
+                plateBotMat.color.setHex(0x38bdf8);
+                plateBotMat.emissive.setHex(0x38bdf8);
+            } else {
+                plateTopMat.color.setHex(0x38bdf8);
+                plateTopMat.emissive.setHex(0x38bdf8);
+                plateBotMat.color.setHex(0xf43f5e);
+                plateBotMat.emissive.setHex(0xf43f5e);
+            }
+            plateTopMat.emissiveIntensity = absQ * 0.7;
+            plateBotMat.emissiveIntensity = absQ * 0.7;
+
+            // Update Inductor Magnetic Field
+            const absI = Math.abs(iCurr);
+            coilMat.emissiveIntensity = absI * 0.8;
+            bFieldGroup.children.forEach((ring, idx) => {
+                ring.material.opacity = absI * (0.75 - idx * 0.18);
+                const s = 0.85 + absI * 0.35;
+                ring.scale.set(s, s, s);
+            });
+
+            // Update Current Particles
+            particles.forEach(p => {
+                p.pos += iCurr * dt * 0.45;
+                const pt = getLoopPoint(p.pos);
+                p.mesh.position.copy(pt);
+                p.mesh.scale.setScalar(0.4 + absI * 0.75);
+            });
+
+            // Update Electromagnetic Waves Radiation
+            emWaves.forEach(w => {
+                if (simMode === 'oscillate' && amplitude > 0.03) {
+                    w.userData.phase = (w.userData.phase + dt * 0.45) % 1;
+                    const scale = 1 + w.userData.phase * 18;
+                    w.scale.set(scale, scale, 1);
+                    w.material.opacity = (1 - w.userData.phase) * amplitude * 0.45;
+                } else {
+                    w.material.opacity = 0;
+                }
+            });
+
+            // Update Energy Progress Bars
+            const eC = Math.round(q * q * 100);
+            const eB = Math.round(iCurr * iCurr * 100);
+            document.getElementById('val-ec').textContent = `${eC}%`;
+            document.getElementById('bar-ec').style.width = `${eC}%`;
+            document.getElementById('val-eb').textContent = `${eB}%`;
+            document.getElementById('bar-eb').style.width = `${eB}%`;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        requestAnimationFrame(animate);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
